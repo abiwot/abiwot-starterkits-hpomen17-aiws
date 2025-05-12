@@ -1,0 +1,10 @@
+---
+# Default SSH keys to add to authorized_keys
+# Add your public SSH keys here
+ssh_authorized_keys:
+  - ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIHNjzA67rod+9hKjP78osInL2K6/1c0oaJFUuP1tayL1 ansible@management_20250126
+  - ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIKF1m77zpG5X3zm/G4c2fOGL+pnql20YnYjbTfSPnZ/B yinyang@cdalapai
+  # Add more keys as needed
+
+# SSH user - using the current user running the playbook
+ssh_user: "{{ lookup('env', 'USER') }}"

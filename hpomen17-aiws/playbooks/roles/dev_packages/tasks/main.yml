@@ -1,0 +1,58 @@
+---
+- name: Install development packages
+  block:
+    - name: Install common development tools
+      apt:
+        name:
+          - build-essential
+          - gcc
+          - g++
+          - make
+          - cmake
+          - pkg-config
+          - autoconf
+          - automake
+          - libtool
+          - python3-dev
+          - python3-pip
+          - python3-venv
+          - curl
+          - wget
+          - software-properties-common
+          - apt-transport-https
+        state: present
+
+    # Install Go
+    - name: Check if Go is installed
+      command: go version
+      register: go_version
+      changed_when: false
+      failed_when: false
+      check_mode: no
+
+    - name: Download Go
+      get_url:
+        url: https://go.dev/dl/go1.22.0.linux-amd64.tar.gz
+        dest: /tmp/go1.22.0.linux-amd64.tar.gz
+        mode: '0644'
+      when: go_version.rc != 0
+
+    - name: Extract Go
+      unarchive:
+        src: /tmp/go1.22.0.linux-amd64.tar.gz
+        dest: /usr/local
+        remote_src: yes
+      when: go_version.rc != 0
+
+    - name: Add Go to PATH
+      lineinfile:
+        path: /etc/profile.d/go.sh
+        line: 'export PATH=$PATH:/usr/local/go/bin'
+        create: yes
+        mode: '0644'
+      when: go_version.rc != 0
+
+  rescue:
+    - name: Log development packages installation failure
+      debug:
+        msg: "Failed to install development packages. Please check the logs for more information."

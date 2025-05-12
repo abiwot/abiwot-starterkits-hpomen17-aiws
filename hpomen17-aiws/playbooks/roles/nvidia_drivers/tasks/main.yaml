@@ -1,0 +1,328 @@
+---
+# NVIDIA driver role based on NOTES.md
+
+# Install Ubuntu Required Packages
+# Based on NOTES.md section "Ubuntu Required Packages"
+- name: Update apt cache
+  ansible.builtin.apt:
+    update_cache: yes
+    cache_valid_time: "{{ apt_cache_valid_time }}"
+
+- name: Upgrade all packages
+  ansible.builtin.apt:
+    upgrade: yes
+
+- name: Install Ubuntu required packages
+  ansible.builtin.apt:
+    name:
+      - build-essential
+      - dkms
+      - "linux-headers-{{ ansible_kernel }}"
+      - software-properties-common
+      - curl
+      - wget
+      - git
+      - unzip
+    state: present
+
+# Install HP Specific Drivers
+# Based on NOTES.md section "HP Specific Drivers"
+- name: Install HP specific drivers
+  ansible.builtin.apt:
+    name:
+      - fwupd
+      - hplip
+      - htop
+      - lm-sensors
+    state: present
+
+- name: Refresh firmware update daemon
+  ansible.builtin.command:
+    argv:
+      - fwupdmgr
+      - refresh
+      - --force
+  changed_when: false
+
+- name: Update firmware
+  ansible.builtin.command:
+    argv:
+      - fwupdmgr
+      - update
+  register: fwupd_result
+  changed_when: "'No updatable devices' not in fwupd_result.stdout"
+  failed_when: false
+
+# Install Intel GPU Drivers
+# Based on NOTES.md section "Install Intel GPU Drivers"
+- name: Install Intel GPU drivers and utilities
+  ansible.builtin.apt:
+    name:
+      - "{{ intel_gpu_driver_packages}}"
+    state: present
+
+# Set Intel ENV
+# Based on NOTES.md section "Set Intel ENV"
+- name: Set Intel GPU environment variables
+  ansible.builtin.lineinfile:
+    path: /etc/environment
+    line: "{{ item }}"
+    state: present
+  loop:
+    - "export LIBVA_DRIVER_NAME=iHD"
+    - "export VDPAU_DRIVER=va_gl"
+
+# Enable Vulkan Support
+# Based on NOTES.md section "Enable Vulkan Support"
+- name: Enable Vulkan support for Intel GPU
+  ansible.builtin.apt:
+    name: mesa-vulkan-drivers
+    state: present
+
+# Install Ubuntu nVidia Drivers
+# Based on NOTES.md section "Install Ubuntu nVidia Drivers"
+- name: Add restricted and multiverse components
+  ansible.builtin.apt_repository:
+    repo: "deb http://archive.ubuntu.com/ubuntu {{ ansible_distribution_release }} main restricted universe multiverse"
+    state: present
+
+- name: Add restricted and multiverse components for updates
+  ansible.builtin.apt_repository:
+    repo: "deb http://archive.ubuntu.com/ubuntu {{ ansible_distribution_release }}-updates main restricted universe multiverse"
+    state: present
+
+- name: Update apt cache after adding repositories
+  ansible.builtin.apt:
+    update_cache: yes
+
+- name: Install ubuntu-drivers-common
+  ansible.builtin.apt:
+    name: ubuntu-drivers-common
+    state: present
+
+- name: Install NVIDIA drivers using ubuntu-drivers
+  ansible.builtin.command:
+    argv:
+      - ubuntu-drivers
+      - install
+      - "{{ nvidia_driver_version }}"
+  register: nvidia_drivers_result
+  changed_when: "'No drivers found for installation.' not in nvidia_drivers_result.stdout"
+  failed_when: false
+
+# Configure GPU Prime Settings
+# Based on NOTES.md section "Configure GPU Prime Settings"
+- name: Create xorg.conf.d directory if it doesn't exist
+  ansible.builtin.file:
+    path: /etc/X11/xorg.conf.d
+    state: directory
+    mode: '0755'
+
+- name: Configure GPU Prime settings
+  ansible.builtin.copy:
+    dest: /etc/X11/xorg.conf.d/prime-hybrid.conf
+    content: |
+      Section "ServerLayout"
+          Identifier "layout"
+          Option "AllowNVIDIAGPUScreens"
+      EndSection
+
+      Section "OutputClass"
+          Identifier "intel"
+          MatchDriver "i915"
+          Driver "modesetting"
+          Option "PrimaryGPU" "yes"
+      EndSection
+
+      Section "OutputClass"
+          Identifier "nvidia"
+          MatchDriver "nvidia-drm"
+          Driver "nvidia"
+          Option "AllowEmptyInitialConfiguration"
+          Option "PrimaryGPU" "no"
+          Option "AllowExternalGpus" "false"
+          Option "SLI" "Off"
+          Option "BaseMosaic" "off"
+      EndSection
+    mode: '0644'
+  notify: restart display
+
+# Configure nVidia Prime Settings
+# Based on NOTES.md section "Configure nVidia Prime Settings"
+- name: Create nvidia directory if it doesn't exist
+  ansible.builtin.file:
+    path: /etc/nvidia
+    state: directory
+    mode: '0755'
+
+- name: Configure NVIDIA Prime settings
+  ansible.builtin.copy:
+    dest: /etc/nvidia/nvidia-pm.conf
+    content: |
+      # Configuration to keep the NVIDIA GPU for compute only
+      AutoPowerControlMode=2
+    mode: '0644'
+  notify: restart display
+
+- name: Set Prime to specified mode
+  ansible.builtin.command:
+    argv:
+      - prime-select
+      - "{{ nvidia_prime_mode }}"
+  register: prime_select_result
+  changed_when: "'already selected' not in prime_select_result.stdout"
+  failed_when: false
+  notify: restart display
+
+# Install nVidia CUDA
+# Based on NOTES.md section "Install nVidia CUDA"
+- name: Install NVIDIA CUDA toolkit
+  ansible.builtin.apt:
+    name: nvidia-cuda-toolkit
+    state: present
+  notify: reboot required
+
+# Set CUDA ENV
+# Based on NOTES.md section "Set CUDA ENV"
+- name: Set CUDA environment variables in bashrc
+  ansible.builtin.blockinfile:
+    path: "{{ lookup('ansible.builtin.env', 'HOME') }}/.bashrc"
+    marker: "# {mark} ANSIBLE MANAGED BLOCK - CUDA ENV"
+    block: |
+      export CUDA_DEVICE_ORDER={{ cuda_device_order }}
+      export CUDA_VISIBLE_DEVICES={{ cuda_visible_devices }}  # Makes only the NVIDIA GPU visible to CUDA
+    create: yes
+  become: false
+
+# Install nvtop with Intel support
+# Based on NOTES.md section "Install nvtop with Intel support"
+- name: Install nvtop dependencies and build tools
+  ansible.builtin.apt:
+    name:
+      - "{{ nvtop_build_packages }}"
+    state: present
+
+- name: Create nvtop source directory
+  ansible.builtin.file:
+    path: "{{ nvtop_source_dir }}"
+    state: directory
+    mode: '0755'
+  become: false
+
+- name: Clone nvtop repository
+  ansible.builtin.git:
+    repo: "{{ nvtop_git_repo }}"
+    dest: "{{ nvtop_source_dir }}/nvtop"
+    clone: yes
+    update: yes
+  become: false
+
+- name: Create nvtop build directory
+  ansible.builtin.file:
+    path: "{{ nvtop_source_dir }}/nvtop/build"
+    state: directory
+    mode: '0755'
+  become: false
+
+- name: Configure nvtop with Intel support
+  ansible.builtin.command:
+    argv:
+      - cmake
+      - "{{ nvtop_source_dir }}/nvtop"
+      - "-DINTEL_SUPPORT={{ 'ON' if nvtop_intel_support else 'OFF' }}"
+  args:
+    chdir: "{{ nvtop_source_dir }}/nvtop/build"
+  become: false
+  changed_when: true
+
+- name: Build nvtop
+  ansible.builtin.command:
+    argv:
+      - make
+  args:
+    chdir: "{{ nvtop_source_dir }}/nvtop/build"
+  become: false
+  changed_when: true
+
+- name: Install nvtop
+  ansible.builtin.command:
+    argv:
+      - make
+      - install
+  args:
+    chdir: "{{ nvtop_source_dir }}/nvtop/build"
+  become: true
+  changed_when: true
+
+# Verification tasks
+# Based on NOTES.md section "Verify GPU Configurations"
+- name: Verify NVIDIA hardware detection
+  ansible.builtin.shell:
+    cmd: lspci | grep -i nvidia
+  register: nvidia_hardware_check
+  changed_when: false
+  failed_when: false
+  check_mode: no
+
+- name: Display NVIDIA hardware detection results
+  ansible.builtin.debug:
+    msg: "NVIDIA hardware detection: {{ 'Success' if nvidia_hardware_check.rc == 0 else 'Failed' }}"
+
+- name: Verify Intel GPU handling display
+  ansible.builtin.shell:
+    cmd: glxinfo | grep "OpenGL renderer"
+  register: intel_gpu_check
+  changed_when: false
+  failed_when: false
+  check_mode: no
+
+- name: Display Intel GPU handling results
+  ansible.builtin.debug:
+    msg: "Intel GPU handling display: {{ 'Success' if 'Intel' in intel_gpu_check.stdout else 'Failed' }}"
+
+- name: Verify Prime-select
+  ansible.builtin.command:
+    argv:
+      - prime-select
+      - query
+  register: prime_select_check
+  changed_when: false
+  failed_when: false
+  check_mode: no
+
+- name: Display Prime-select results
+  ansible.builtin.debug:
+    msg: "Prime-select query: {{ 'Success' if 'intel' in prime_select_check.stdout else 'Failed' }}"
+
+- name: Verify NVIDIA-smi
+  ansible.builtin.command:
+    argv:
+      - nvidia-smi
+      - -L
+  register: nvidia_smi_check
+  changed_when: false
+  failed_when: false
+  check_mode: no
+
+- name: Display NVIDIA-smi results
+  ansible.builtin.debug:
+    msg: "NVIDIA-smi check: {{ 'Success' if nvidia_smi_check.rc == 0 else 'Failed' }}"
+
+- name: Verify CUDA toolkit
+  ansible.builtin.command:
+    argv:
+      - nvcc
+      - --version
+  register: nvcc_check
+  changed_when: false
+  failed_when: false
+  check_mode: no
+
+- name: Display CUDA toolkit results
+  ansible.builtin.debug:
+    msg: "CUDA toolkit check: {{ 'Success' if nvcc_check.rc == 0 else 'Failed' }}"
+
+- name: Notify user about reboot requirement
+  ansible.builtin.debug:
+    msg: "NVIDIA driver installation complete. A system reboot is required for changes to take effect."
+  notify: reboot required

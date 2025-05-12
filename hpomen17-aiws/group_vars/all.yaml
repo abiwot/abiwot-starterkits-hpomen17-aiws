@@ -1,0 +1,19 @@
+---
+# Common variables for all hosts
+
+# User information
+ansible_user: "{{ lookup('ansible.builtin.env', 'USER') }}"
+
+# Package management
+apt_cache_valid_time: 3600
+
+# NVIDIA and CUDA settings
+nvidia_cuda_version: "12-8"
+
+# Development tools versions
+go_version: "1.22.0"
+
+# SSH settings
+ssh_permit_root_login: "prohibit-password"
+ssh_password_authentication: "no"
+ssh_pubkey_authentication: "yes"

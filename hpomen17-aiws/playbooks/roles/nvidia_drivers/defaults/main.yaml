@@ -1,0 +1,58 @@
+---
+# Default variables for NVIDIA driver role
+
+# Intel GPU driver and utility packages
+intel_gpu_driver_packages:
+  - mesa-utils
+  - intel-media-va-driver
+  - intel-gpu-tools
+  - libvulkan1
+  - libvulkan-dev
+  - vulkan-tools
+  - libva-dev
+  - vainfo
+  - clinfo
+  - ocl-icd-opencl-dev
+
+# NVIDIA driver version
+nvidia_driver_version: "nvidia:570-server-open"  # Example version, adjust as needed
+
+# NVIDIA and CUDA settings
+nvidia_cuda_version: "12-8"
+
+# Environment settings
+apt_cache_valid_time: 3600
+
+# NVIDIA Prime settings
+nvidia_prime_mode: "intel"  # Options: intel, nvidia, on-demand
+
+# CUDA environment variables
+cuda_device_order: "PCI_BUS_ID"
+cuda_visible_devices: "0"  # Makes only the NVIDIA GPU visible to CUDA
+
+# nvtop settings
+## nvtop build packages
+nvtop_build_packages:
+  - libsystemd-dev
+  - libudev-dev
+  - build-essential
+  - libdrm-dev
+  - libpci-dev
+  - cmake
+  - make
+  - gcc
+  - g++
+  - pkg-config
+  - git
+  - autoconf
+  - automake
+  - libtool
+  - devscripts
+  - debhelper
+  - dh-make
+  - libreadline-dev
+  - libncurses-dev
+nvtop_git_repo: "https://github.com/Syllo/nvtop.git"
+## Use lookup('env', 'HOME') to get the actual user's home directory, not the root user's
+nvtop_source_dir: "{{ lookup('ansible.builtin.env', 'HOME') }}/source/nvtop"
+nvtop_intel_support: true

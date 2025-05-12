@@ -1,0 +1,53 @@
+---
+- name: Configure SSH keys
+  block:
+    - name: Get current user
+      command: whoami
+      register: current_user
+      changed_when: false
+      become: false
+
+    - name: Set ssh_user if not defined
+      set_fact:
+        ssh_user: "{{ current_user.stdout }}"
+      when: ssh_user is not defined
+
+    - name: Ensure .ssh directory exists
+      file:
+        path: "/home/{{ ssh_user }}/.ssh"
+        state: directory
+        mode: '0700'
+        owner: "{{ ssh_user }}"
+        group: "{{ ssh_user }}"
+
+    - name: Add SSH keys to authorized_keys
+      authorized_key:
+        user: "{{ ssh_user }}"
+        key: "{{ item }}"
+        state: present
+      with_items: "{{ ssh_authorized_keys }}"
+
+    - name: Ensure correct permissions on authorized_keys
+      file:
+        path: "/home/{{ ssh_user }}/.ssh/authorized_keys"
+        mode: '0600'
+        owner: "{{ ssh_user }}"
+        group: "{{ ssh_user }}"
+      when: ssh_authorized_keys | length > 0
+
+    - name: Configure SSH server for key-based authentication
+      lineinfile:
+        path: /etc/ssh/sshd_config
+        regexp: "{{ item.regexp }}"
+        line: "{{ item.line }}"
+        state: present
+      with_items:
+        - { regexp: '^#?PasswordAuthentication', line: 'PasswordAuthentication no' }
+        - { regexp: '^#?PubkeyAuthentication', line: 'PubkeyAuthentication yes' }
+        - { regexp: '^#?PermitRootLogin', line: 'PermitRootLogin prohibit-password' }
+      notify: Restart SSH service
+
+  rescue:
+    - name: Log SSH keys configuration failure
+      debug:
+        msg: "Failed to configure SSH keys. Please check the logs for more information."

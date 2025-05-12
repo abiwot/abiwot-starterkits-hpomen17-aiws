@@ -1,0 +1,36 @@
+---
+- name: Configure Ubuntu 24.04 Development Environment
+  hosts: localhost
+  become: true
+  gather_facts: true
+
+  tasks:
+    - name: Include NVIDIA drivers role
+      ansible.builtin.include_role:
+        name: nvidia_drivers
+      tags:
+        - nvidia
+
+    - name: Include basic packages role
+      ansible.builtin.include_role:
+        name: basic_packages
+      tags:
+        - basic_packages
+
+    - name: Include SSH keys role
+      ansible.builtin.include_role:
+        name: ssh_keys
+      tags:
+        - ssh_keys
+
+    - name: Include development packages role
+      ansible.builtin.include_role:
+        name: dev_packages
+      tags:
+        - dev_packages
+
+    - name: Include vim configuration role
+      ansible.builtin.include_role:
+        name: vim_config
+      tags:
+        - vim_config

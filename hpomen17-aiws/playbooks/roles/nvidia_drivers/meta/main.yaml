@@ -1,0 +1,26 @@
+---
+galaxy_info:
+  role_name: nvidia_drivers
+  author: HP Omen 17 AI Workstation Team
+  description: Installs and configures NVIDIA drivers, CUDA toolkit, and related components on Ubuntu 24.04 systems with hybrid Intel/NVIDIA graphics
+  company: HP Omen 17 AI Workstation Project
+  license: Proprietary
+  min_ansible_version: "2.9"
+  platforms:
+    - name: Ubuntu
+      versions:
+        - noble
+  galaxy_tags:
+    - nvidia
+    - cuda
+    - gpu
+    - drivers
+    - development
+    - ai
+    - ml
+    - workstation
+    - ubuntu
+    - hp
+    - omen
+
+dependencies: []

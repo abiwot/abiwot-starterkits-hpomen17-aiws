@@ -1,0 +1,50 @@
+---
+- name: Install basic packages
+  block:
+    - name: Update apt cache
+      apt:
+        update_cache: yes
+        cache_valid_time: 3600
+
+    - name: Install basic system utilities
+      apt:
+        name:
+          - net-tools
+          - vim
+          - wget
+          - htop
+          - curl
+          - dnsutils
+          - openssh-server
+          - git
+          - unzip
+          - zip
+          - tar
+          - ca-certificates
+          - gnupg
+          - lsb-release
+          - apt-transport-https
+        state: present
+
+    - name: Ensure SSH server is running
+      service:
+        name: ssh
+        state: started
+        enabled: yes
+
+    - name: Configure firewall to allow SSH
+      ufw:
+        rule: allow
+        name: OpenSSH
+      when: ansible_distribution == 'Ubuntu'
+
+    - name: Enable UFW
+      ufw:
+        state: enabled
+        policy: deny
+      when: ansible_distribution == 'Ubuntu'
+
+  rescue:
+    - name: Log basic packages installation failure
+      debug:
+        msg: "Failed to install basic packages. Please check the logs for more information."
